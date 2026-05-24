@@ -34,6 +34,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+  int _selectedEvolutionPhase = 0; // 0 = Fase 1, 1 = Fase 2, etc.
 
   // Contadores de metas
   int _waterCount = 0;
@@ -45,7 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _mentalCount = 0;
   final int _mentalGoal = 1;
   
-  // Garantindo listas com tamanho fixo de 30 dias
+  // Listas fixas com 30 dias
   final List<bool> _fase1Dias = List<bool>.filled(30, false, growable: false);
   final List<bool> _fase2Dias = List<bool>.filled(30, false, growable: false);
   final List<bool> _fase3Dias = List<bool>.filled(30, false, growable: false);
@@ -54,6 +55,13 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _alertAgua = false;
   bool _alertTreinoFisico = false;
   bool _alertTreinoMental = false;
+
+  // Controladores de texto para a aba de evolução
+  final TextEditingController _pesoInicialController = TextEditingController();
+  final TextEditingController _pesoFinalController = TextEditingController();
+  final TextEditingController _roupasController = TextEditingController();
+  final TextEditingController _videoController = TextEditingController();
+  bool _usoImagemAutorizado = false;
 
   @override
   void initState() {
@@ -72,13 +80,26 @@ class _HomeScreenState extends State<HomeScreen> {
       _alertTreinoFisico = prefs.getBool('alertTreinoFisico') ?? false;
       _alertTreinoMental = prefs.getBool('alertTreinoMental') ?? false;
       
-      // Carregamento seguro limitando estritamente a 30 iterações
       for (int i = 0; i < 30; i++) {
         _fase1Dias[i] = prefs.getBool('fase1_$i') ?? false;
         _fase2Dias[i] = prefs.getBool('fase2_$i') ?? false;
         _fase3Dias[i] = prefs.getBool('fase3_$i') ?? false;
         _fase4Dias[i] = prefs.getBool('fase4_$i') ?? false;
       }
+
+      _loadPhaseEvolutionData();
+    });
+  }
+
+  // Carrega dados específicos da aba de evolução baseados na fase selecionada
+  void _loadPhaseEvolutionData() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _pesoInicialController.text = prefs.getString('ev_peso_init_$_selectedEvolutionPhase') ?? '';
+      _pesoFinalController.text = prefs.getString('ev_peso_fim_$_selectedEvolutionPhase') ?? '';
+      _roupasController.text = prefs.getString('ev_roupas_$_selectedEvolutionPhase') ?? '';
+      _videoController.text = prefs.getString('ev_video_$_selectedEvolutionPhase') ?? '';
+      _usoImagemAutorizado = prefs.getBool('ev_autoriza_$_selectedEvolutionPhase') ?? false;
     });
   }
 
@@ -90,6 +111,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _saveInt(String key, int value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(key, value);
+  }
+
+  Future<void> _saveString(String key, String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(key, value);
   }
 
   @override
@@ -117,7 +143,179 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
 
-      // ABA 3: ALERTAS E SAÚDE
+      // ABA 3: ABA DE EVOLUÇÃO VISUAL E DEPOIMENTOS
+      SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Minha Evolução', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.green)),
+            const SizedBox(height: 10),
+            const Text('Monitore suas transformações físicas e depoimentos ao longo das fases.', style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 15),
+
+            // Seletor de Fase de Evolução
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: List.generate(4, (index) {
+                return ChoiceChip(
+                  label: Text('Fase ${index + 1}'),
+                  selected: _selectedEvolutionPhase == index,
+                  selectedColor: Colors.green,
+                  labelStyle: TextStyle(color: _selectedEvolutionPhase == index ? Colors.white : Colors.black),
+                  onSelected: (selected) {
+                    if (selected) {
+                      setState(() {
+                        _selectedEvolutionPhase = index;
+                        _loadPhaseEvolutionData();
+                      });
+                    }
+                  },
+                );
+              }),
+            ),
+            const SizedBox(height: 20),
+
+            // CARD 1: FOTOS E PESOS (INÍCIO VS FINAL)
+            Card(
+              elevation: 3,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Acompanhamento Antropométrico', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 15),
+                    Row(
+                      children: [
+                        // Coluna Início
+                        Expanded(
+                          child: Column(
+                            children: [
+                              const Text('Início da Fase', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+                              const SizedBox(height: 10),
+                              _buildPhotoPlaceholder('Foto Inicial'),
+                              const SizedBox(height: 10),
+                              TextField(
+                                controller: _pesoInicialController,
+                                decoration: const InputDecoration(labelText: 'Peso Inicial (kg)', border: OutlineInputBorder()),
+                                keyboardType: TextInputType.number,
+                                onChanged: (val) => _saveString('ev_peso_init_$_selectedEvolutionPhase', val),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        // Coluna Fim
+                        Expanded(
+                          child: Column(
+                            children: [
+                              const Text('Fim da Fase', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                              const SizedBox(height: 10),
+                              _buildPhotoPlaceholder('Foto Final'),
+                              const SizedBox(height: 10),
+                              TextField(
+                                controller: _pesoFinalController,
+                                decoration: const InputDecoration(labelText: 'Peso Final (kg)', border: OutlineInputBorder()),
+                                keyboardType: TextInputType.number,
+                                onChanged: (val) => _saveString('ev_peso_fim_$_selectedEvolutionPhase', val),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // CARD 2: ROUPAS QUE SERVIRAM
+            Card(
+              elevation: 3,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.checkroom, color: Colors.amber),
+                        SizedBox(width: 8),
+                        Text('Conquistas no Guarda-Roupa', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _roupasController,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        hintText: 'Ex: Aquela calça jeans antiga voltou a fechar; o vestido não está mais apertado...',
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (val) => _saveString('ev_roupas_$_selectedEvolutionPhase', val),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // CARD 3: DEPOIMENTO EM VÍDEO & TERMO DE USO DE IMAGEM
+            Card(
+              elevation: 3,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.video_call, color: Colors.red),
+                        SizedBox(width: 8),
+                        Text('Depoimento em Vídeo', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _videoController,
+                      decoration: const InputDecoration(
+                        labelText: 'Link do Vídeo (YouTube / Drive)',
+                        prefixIcon: Icon(Icons.link),
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (val) => _saveString('ev_video_$_selectedEvolutionPhase', val),
+                    ),
+                    const SizedBox(height: 15),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+                      ),
+                      child: CheckboxListTile(
+                        title: const Text(
+                          'Autorizo o uso da minha imagem e depoimento para divulgação de resultados.',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                        ),
+                        activeColor: Colors.red,
+                        value: _usoImagemAutorizado,
+                        onChanged: (val) {
+                          setState(() { _usoImagemAutorizado = val ?? false; });
+                          _saveBool('ev_autoriza_$_selectedEvolutionPhase', val ?? false);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+
+      // ABA 4: ALERTAS E SAÚDE
       SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -126,7 +324,6 @@ class _HomeScreenState extends State<HomeScreen> {
             const Text('Saúde & Lembretes', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.green)),
             const SizedBox(height: 20),
             
-            // CARD 1: BEBER ÁGUA
             _buildCounterCard(
               title: 'Beber Água',
               current: _waterCount,
@@ -148,7 +345,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 16),
 
-            // CARD 2: TREINO FÍSICO
             _buildCounterCard(
               title: 'Realizar Treino Físico',
               current: _physicalCount,
@@ -170,7 +366,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 16),
 
-            // CARD 3: TREINO MENTAL
             _buildCounterCard(
               title: 'Treino Mental / Meditação',
               current: _mentalCount,
@@ -232,13 +427,35 @@ class _HomeScreenState extends State<HomeScreen> {
         currentIndex: _currentIndex,
         selectedItemColor: Colors.green,
         unselectedItemColor: Colors.grey,
+        type: BottomNavigationBarType.fixed,
         onTap: (index) {
           setState(() { _currentIndex = index; });
         },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.language), label: 'Plataforma'),
           BottomNavigationBarItem(icon: Icon(Icons.assignment_turned_in), label: 'Fases'),
+          BottomNavigationBarItem(icon: Icon(Icons.trending_up), label: 'Evolução'),
           BottomNavigationBarItem(icon: Icon(Icons.favorite), label: 'Saúde'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPhotoPlaceholder(String label) {
+    return Container(
+      height: 100,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.grey.shade200,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade400, style: BorderStyle.solid),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.add_a_photo, color: Colors.grey, size: 30),
+          const SizedBox(height: 5),
+          Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
         ],
       ),
     );
@@ -280,7 +497,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 10),
             LinearProgressIndicator(
               value: factor,
-              backgroundColor: barColor.withOpacity(0.15),
+              backgroundColor: barColor.withValues(alpha: 0.15),
               color: barColor,
               minHeight: 10,
             ),

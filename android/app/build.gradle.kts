@@ -7,8 +7,26 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+plugins {
+    id("com.android.application")
+    id("kotlin-android")
+    id("dev.flutter.flutter-gradle-plugin")
+}
+
 android {
-    // ... mantenha o que já existir aqui dentro e adicione/ajuste os blocos abaixo:
+    namespace = "com.example.regenerar"
+    compileSdk = flutter.compileSdkVersion
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    // Força o Gradle a usar a versão correta do Java compatível com o ecossistema do app
+    kotlin {
+        jvmToolchain(17)
+    }
+
     signingConfigs {
         create("release") {
             keyAlias = keystoreProperties["keyAlias"] as String?
@@ -18,9 +36,21 @@ android {
         }
     }
 
+    defaultConfig {
+        applicationId = "com.example.regenerar"
+        minSdk = flutter.minSdkVersion
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+    }
+
     buildTypes {
         getByName("release") {
             signingConfig = signingConfigs.getByName("release")
         }
     }
+}
+
+flutter {
+    source = "../.."
 }

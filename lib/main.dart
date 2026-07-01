@@ -2,14 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:ui_web' as ui;
+// Use `dart:ui` and call the web-only API only when running on web.
+import 'dart:ui' as ui;
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
   if (kIsWeb) {
     // Usando uma factory registrada de forma limpa para a Web
+    // `platformViewRegistry` existe apenas na runtime web. Silence analyzer for the prefixed name.
+    // ignore: undefined_prefixed_name
     ui.platformViewRegistry.registerViewFactory('iframe-site', (int viewId) {
       // Criado dinamicamente para evitar erro de compilação no Android
       final element = Object() as dynamic; // Fallback estrutural seguro

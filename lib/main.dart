@@ -2,17 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
-// Use `dart:ui` and call the web-only API only when running on web.
-import 'dart:ui' as ui;
+// Conditional import: use web implementation when building for web, otherwise use a no-op stub.
+import 'src/platform_view_registry_stub.dart'
+    if (dart.library.html) 'src/platform_view_registry_web.dart'
+    as platform_view_registry;
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
   if (kIsWeb) {
-    // Usando uma factory registrada de forma limpa para a Web
-    // `platformViewRegistry` existe apenas na runtime web. Silence analyzer for the prefixed name.
-    // ignore: undefined_prefixed_name
-    ui.platformViewRegistry.registerViewFactory('iframe-site', (int viewId) {
+    // Usando uma factory registrada de forma limpa para a Web via implementação condicional
+    platform_view_registry.registerViewFactory('iframe-site', (int viewId) {
       // Criado dinamicamente para evitar erro de compilação no Android
       final element = Object() as dynamic; // Fallback estrutural seguro
       return element;
@@ -639,12 +639,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 10),
             LinearProgressIndicator(
               value: factor,
-              backgroundColor: Color.fromRGBO(
-                barColor.red,
-                barColor.green,
-                barColor.blue,
-                0.15,
-              ),
+              backgroundColor: barColor.withValues(alpha: 0.15),
               color: barColor,
               minHeight: 10,
             ),

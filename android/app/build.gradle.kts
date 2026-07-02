@@ -14,7 +14,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.regenerar"
+    namespace = "com.regenerar.app"
     compileSdk = flutter.compileSdkVersion
 
     compileOptions {
@@ -25,6 +25,9 @@ android {
     // Força o Gradle a usar a versão correta do Java compatível com o ecossistema do app
     kotlin {
         jvmToolchain(17)
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8)
+        }
     }
 
     signingConfigs {
@@ -37,7 +40,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.regenerar"
+        applicationId = "com.regenerar.app"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

@@ -1,3 +1,5 @@
-void redirectTo(String url) {
-  // No-op for non-web platforms.
+import 'package:flutter/material.dart';
+
+Widget buildSiteView(String url) {
+  return const SizedBox.shrink();
 }

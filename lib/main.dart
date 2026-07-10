@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import 'src/web_redirect_stub.dart'
     if (dart.library.html) 'src/web_redirect.dart'
     as web_redirect;
@@ -13,10 +13,6 @@ final Uri _siteUrl = Uri.parse('https://regeneraremagrecimento.onrender.com');
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
-  if (kIsWeb) {
-    web_redirect.redirectTo(_siteUrl.toString());
-  }
 
   runApp(
     const MaterialApp(debugShowCheckedModeBanner: false, home: HomeScreen()),
@@ -33,6 +29,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
   int _selectedEvolutionPhase = 0;
+  late WebViewController _webViewController;
 
   int _waterCount = 0;
   final int _waterGoal = 8;
@@ -62,12 +59,24 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadPreferences();
+
     if (!kIsWeb) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _openSite();
-        }
-      });
+      _webViewController = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..setNavigationDelegate(
+          NavigationDelegate(
+            onWebResourceError: (WebResourceError error) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Erro ao carregar página: ${error.description}',
+                  ),
+                ),
+              );
+            },
+          ),
+        )
+        ..loadRequest(_siteUrl);
     }
   }
 
@@ -118,19 +127,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  Future<void> _openSite() async {
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    final opened = await launchUrl(
-      _siteUrl,
-      mode: LaunchMode.externalApplication,
-    );
-    if (!opened && mounted) {
-      messenger?.showSnackBar(
-        const SnackBar(content: Text('Não foi possível abrir a URL')),
-      );
-    }
-  }
-
   Future<void> _saveBool(String key, bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(key, value);
@@ -149,14 +145,10 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final List<Widget> screens = [
-      // ABA 1: PLATAFORMA
-      const Center(
-        child: SizedBox(
-          width: 24,
-          height: 24,
-          child: CircularProgressIndicator(strokeWidth: 2.5),
-        ),
-      ),
+      // ABA 1: PLATAFORMA - Site dentro do app
+      kIsWeb
+          ? web_redirect.buildSiteView(_siteUrl.toString())
+          : WebViewWidget(controller: _webViewController),
 
       // ABA 2: DIÁRIO DE FASES
       SingleChildScrollView(

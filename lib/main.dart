@@ -1,22 +1,21 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:url_launcher/url_launcher.dart';
+import 'src/web_redirect_stub.dart'
+    if (dart.library.html) 'src/web_redirect.dart'
+    as web_redirect;
 
 // Conditional import: use web implementation when building for web, otherwise use a no-op stub.
-import 'src/platform_view_registry_stub.dart'
-    if (dart.library.html) 'src/platform_view_registry_web.dart'
-    as platform_view_registry;
+// platform view registry conditional import removed to avoid web build issues
+
+final Uri _siteUrl = Uri.parse('https://regeneraremagrecimento.onrender.com');
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
   if (kIsWeb) {
-    // Usando uma factory registrada de forma limpa para a Web via implementação condicional
-    platform_view_registry.registerViewFactory('iframe-site', (int viewId) {
-      // Criado dinamicamente para evitar erro de compilação no Android
-      final element = Object() as dynamic; // Fallback estrutural seguro
-      return element;
-    });
+    web_redirect.redirectTo(_siteUrl.toString());
   }
 
   runApp(
@@ -63,6 +62,13 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadPreferences();
+    if (!kIsWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _openSite();
+        }
+      });
+    }
   }
 
   @override
@@ -112,6 +118,19 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  Future<void> _openSite() async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final opened = await launchUrl(
+      _siteUrl,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && mounted) {
+      messenger?.showSnackBar(
+        const SnackBar(content: Text('Não foi possível abrir a URL')),
+      );
+    }
+  }
+
   Future<void> _saveBool(String key, bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(key, value);
@@ -130,18 +149,14 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final List<Widget> screens = [
-      // ABA 1: PLATAFORMA (Segura para compilação nativa)
-      kIsWeb
-          ? const HtmlElementView(viewType: 'iframe-site')
-          : const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text(
-                  'Para exibir o site aqui no app Android, configure o pacote webview_flutter.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ),
+      // ABA 1: PLATAFORMA
+      const Center(
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(strokeWidth: 2.5),
+        ),
+      ),
 
       // ABA 2: DIÁRIO DE FASES
       SingleChildScrollView(

@@ -1,24 +1,142 @@
+import 'dart:io'; // Necessário para carregar o arquivo de imagem local
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart'; // Abre a galeria/câmera
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-import 'src/web_redirect_stub.dart'
-    if (dart.library.html) 'src/web_redirect.dart'
-    as web_redirect;
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 
-// Conditional import: use web implementation when building for web, otherwise use a no-op stub.
-// platform view registry conditional import removed to avoid web build issues
+// Import condicional corrigido e centralizado
+import 'src/web_redirect_stub.dart'
+    if (dart.library.html) 'src/web_redirect.dart' as web_redirect;
 
 final Uri _siteUrl = Uri.parse('https://regeneraremagrecimento.onrender.com');
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Inicialização do serviço de notificações locais
+  await NotificationService.init();
 
   runApp(
     const MaterialApp(debugShowCheckedModeBanner: false, home: HomeScreen()),
   );
 }
 
+// -----------------------------------------------------------------------------
+// SERVIÇO DE NOTIFICAÇÕES (Corrigido o funcionamento dos alertas)
+// -----------------------------------------------------------------------------
+class NotificationService {
+  static final FlutterLocalNotificationsPlugin _notificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+
+  static Future<void> init() async {
+    tz.initializeTimeZones();
+
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+
+    const DarwinInitializationSettings initializationSettingsIOS =
+        DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+    );
+
+    const InitializationSettings initializationSettings = InitializationSettings(
+      android: initializationSettingsAndroid,
+      iOS: initializationSettingsIOS,
+    );
+
+    await _notificationsPlugin.initialize(initializationSettings);
+  }
+
+  static Future<void> scheduleWaterAlert(bool active) async {
+    const int waterNotificationId = 999;
+    if (!active) {
+      await _notificationsPlugin.cancel(waterNotificationId);
+      return;
+    }
+
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'water_channel',
+      'Lembrete de Água',
+      channelDescription: 'Canal para lembrar de beber água periodicamente',
+      importance: Importance.max,
+      priority: Priority.high,
+    );
+
+    const NotificationDetails notificationDetails =
+        NotificationDetails(android: androidDetails);
+
+    // Substituído 'everyTwoHours' por 'hourly' para corrigir o erro de compilação
+    await _notificationsPlugin.periodicallyShow(
+      waterNotificationId,
+      'Hora de hidratar! 💧',
+      'Beba um copo d\'água para manter sua meta de hoje.',
+      RepeatInterval.hourly,
+      notificationDetails,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+    );
+  }
+
+  static Future<void> scheduleDailyAlert({
+    required int id,
+    required String title,
+    required String body,
+    required int hour,
+    required int minute,
+    required bool active,
+  }) async {
+    if (!active) {
+      await _notificationsPlugin.cancel(id);
+      return;
+    }
+
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'daily_channel',
+      'Lembretes Diários',
+      channelDescription: 'Canal de lembretes diários de saúde',
+      importance: Importance.max,
+      priority: Priority.high,
+    );
+
+    const NotificationDetails notificationDetails =
+        NotificationDetails(android: androidDetails);
+
+    final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
+    tz.TZDateTime scheduledDate = tz.TZDateTime(
+      tz.local,
+      now.year,
+      now.month,
+      now.day,
+      hour,
+      minute,
+    );
+
+    if (scheduledDate.isBefore(now)) {
+      scheduledDate = scheduledDate.add(const Duration(days: 1));
+    }
+
+    await _notificationsPlugin.zonedSchedule(
+      id,
+      title,
+      body,
+      scheduledDate,
+      notificationDetails,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: DateTimeComponents.time,
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// HOME SCREEN
+// -----------------------------------------------------------------------------
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -54,6 +172,11 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _roupasController = TextEditingController();
   final TextEditingController _videoController = TextEditingController();
   bool _usoImagemAutorizado = false;
+
+  // Lógica de seleção e armazenamento de fotos
+  final ImagePicker _imagePicker = ImagePicker();
+  String? _fotoInicialPath;
+  String? _fotoFinalPath;
 
   @override
   void initState() {
@@ -108,6 +231,25 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       _loadPhaseEvolutionData();
+      
+      // Sincroniza o agendamento das notificações de acordo com o estado salvo
+      NotificationService.scheduleWaterAlert(_alertAgua);
+      NotificationService.scheduleDailyAlert(
+        id: 1000,
+        title: 'Treino de hoje! 🏃‍♂️',
+        body: 'Não se esqueça de realizar o seu treino físico de hoje.',
+        hour: 9,
+        minute: 0,
+        active: _alertTreinoFisico,
+      );
+      NotificationService.scheduleDailyAlert(
+        id: 1001,
+        title: 'Sua mente importa 🧠',
+        body: 'Separe alguns minutos para o seu treino mental ou meditação.',
+        hour: 20,
+        minute: 0,
+        active: _alertTreinoMental,
+      );
     });
   }
 
@@ -124,7 +266,42 @@ class _HomeScreenState extends State<HomeScreen> {
           prefs.getString('ev_video_$_selectedEvolutionPhase') ?? '';
       _usoImagemAutorizado =
           prefs.getBool('ev_autoriza_$_selectedEvolutionPhase') ?? false;
+
+      // Carrega os caminhos das fotos salvos para a fase selecionada
+      _fotoInicialPath =
+          prefs.getString('ev_foto_init_$_selectedEvolutionPhase');
+      _fotoFinalPath = prefs.getString('ev_foto_fim_$_selectedEvolutionPhase');
     });
+  }
+
+  Future<void> _pickImage(bool isInicial) async {
+    try {
+      final XFile? pickedFile = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1000,
+        maxHeight: 1000,
+        imageQuality: 85,
+      );
+
+      if (pickedFile != null) {
+        setState(() {
+          if (isInicial) {
+            _fotoInicialPath = pickedFile.path;
+          } else {
+            _fotoFinalPath = pickedFile.path;
+          }
+        });
+
+        final key = isInicial
+            ? 'ev_foto_init_$_selectedEvolutionPhase'
+            : 'ev_foto_fim_$_selectedEvolutionPhase';
+        await _saveString(key, pickedFile.path);
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao selecionar imagem: $e')),
+      );
+    }
   }
 
   Future<void> _saveBool(String key, bool value) async {
@@ -250,7 +427,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                               ),
                               const SizedBox(height: 10),
-                              _buildPhotoPlaceholder('Foto Inicial'),
+                              _buildPhotoPlaceholder(
+                                'Foto Inicial',
+                                _fotoInicialPath,
+                                () => _pickImage(true),
+                              ),
                               const SizedBox(height: 10),
                               TextField(
                                 controller: _pesoInicialController,
@@ -279,7 +460,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                               ),
                               const SizedBox(height: 10),
-                              _buildPhotoPlaceholder('Foto Final'),
+                              _buildPhotoPlaceholder(
+                                'Foto Final',
+                                _fotoFinalPath,
+                                () => _pickImage(false),
+                              ),
                               const SizedBox(height: 10),
                               TextField(
                                 controller: _pesoFinalController,
@@ -378,10 +563,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 15),
                     Container(
                       decoration: BoxDecoration(
-                        color: Color.fromRGBO(255, 0, 0, 0.05),
+                        color: const Color.fromRGBO(255, 0, 0, 0.05),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: Color.fromRGBO(255, 0, 0, 0.2),
+                          color: const Color.fromRGBO(255, 0, 0, 0.2),
                         ),
                       ),
                       child: CheckboxListTile(
@@ -510,7 +695,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 10),
             SwitchListTile(
-              title: const Text('Lembrete de Beber Água (De 2 em 2h)'),
+              title: const Text('Lembrete de Beber Água (De hora em hora)'),
               value: _alertAgua,
               activeThumbColor: Colors.green,
               onChanged: (val) {
@@ -518,6 +703,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   _alertAgua = val;
                 });
                 _saveBool('alertAgua', val);
+                // CHAMA O AGENDAMENTO REAL:
+                NotificationService.scheduleWaterAlert(val);
               },
             ),
             SwitchListTile(
@@ -529,6 +716,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   _alertTreinoFisico = val;
                 });
                 _saveBool('alertTreinoFisico', val);
+                // CHAMA O AGENDAMENTO REAL:
+                NotificationService.scheduleDailyAlert(
+                  id: 1000,
+                  title: 'Treino de hoje! 🏃‍♂️',
+                  body: 'Não se esqueça de realizar o seu treino físico de hoje.',
+                  hour: 9,
+                  minute: 0,
+                  active: val,
+                );
               },
             ),
             SwitchListTile(
@@ -540,6 +736,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   _alertTreinoMental = val;
                 });
                 _saveBool('alertTreinoMental', val);
+                // CHAMA O AGENDAMENTO REAL:
+                NotificationService.scheduleDailyAlert(
+                  id: 1001,
+                  title: 'Sua mente importa 🧠',
+                  body: 'Separe alguns minutos para o seu treino mental ou meditação.',
+                  hour: 20,
+                  minute: 0,
+                  active: val,
+                );
               },
             ),
           ],
@@ -578,25 +783,43 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildPhotoPlaceholder(String label) {
-    return Container(
-      height: 100,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.grey.shade200,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: Colors.grey.shade400,
-          style: BorderStyle.solid,
+  // Widget de Foto atualizado para receber cliques e renderizar a imagem real
+  Widget _buildPhotoPlaceholder(
+      String label, String? imagePath, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 110,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade200,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: Colors.grey.shade400,
+            style: BorderStyle.solid,
+          ),
         ),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.add_a_photo, color: Colors.grey, size: 30),
-          const SizedBox(height: 5),
-          Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-        ],
+        child: imagePath != null &&
+                imagePath.isNotEmpty &&
+                File(imagePath).existsSync()
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.file(
+                  File(imagePath),
+                  fit: BoxFit.cover,
+                ),
+              )
+            : Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.add_a_photo, color: Colors.grey, size: 30),
+                  const SizedBox(height: 5),
+                  Text(
+                    label,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
       ),
     );
   }
@@ -646,7 +869,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 10),
             LinearProgressIndicator(
               value: factor,
-              backgroundColor: barColor.withValues(alpha: 0.15),
+              backgroundColor: barColor.withAlpha(38), // Equivalente seguro para as versões do SDK
               color: barColor,
               minHeight: 10,
             ),

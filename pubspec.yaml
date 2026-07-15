@@ -2,12 +2,12 @@ name: flutter_application_1
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 1.0.0+5
+version: 1.0.0+8
 
 environment:
   sdk: ^3.12.0
 
-# --- DEPENDÊNCIAS DO SEU APP (Todas reunidas aqui) ---
+# --- DEPENDÊNCIAS DO SEU APP (Todas reunidas em um único lugar) ---
 dependencies:
   flutter:
     sdk: flutter
@@ -19,9 +19,12 @@ dependencies:
   url_launcher: ^6.1.10
   webview_flutter_web: ^0.2.3+4
   
-  # Adicionados para o funcionamento dos alertas/notificações:
+  # Alertas e notificações:
   flutter_local_notifications: ^17.0.0
   timezone: ^0.9.0
+
+  # Adicionar fotos (Galeria/Câmera):
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:
@@ -36,16 +39,10 @@ flutter:
 
   assets:
     - web/icons/gemini-svg.svg
-    # Se o seu ícone de celular estiver dentro de assets/icon/, 
-    # certifique-se de que a pasta está declarada aqui se for usá-la no app:
-    # - assets/icon/
 
 # --- CONFIGURAÇÃO DO GERADOR DE ÍCONES ---
 flutter_launcher_icons:
-  image_path: "assets/icon/icone.regenerar.png" # Certifique-se de que a imagem está exatamente nesta pasta com este nome!
+  image_path: "assets/icon/icone.regenerar.png"
   android: true
   ios: true
   remove_alpha_ios: true
-  web:
-    image_path: "web/icons/gemini-svg.svg"
-    background_color: "#ffffff"

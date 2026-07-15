@@ -18,15 +18,16 @@ android {
     compileSdk = flutter.compileSdkVersion
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        isCoreLibraryDesugaringEnabled = true
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
-    // Força o Gradle a usar a versão correta do Java compatível com o ecossistema do app
+    // Alinhado para rodar na JVM 17 com segurança e sem avisos de build
     kotlin {
         jvmToolchain(17)
         compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8)
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
         }
     }
 
@@ -56,4 +57,9 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Biblioteca de desaçucaramento (desugaring) para compatibilidade de APIs modernas
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 }
